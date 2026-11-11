@@ -69,14 +69,14 @@ def load_post(folder):
     meta = json.loads((folder / "post.json").read_text(encoding="utf-8"))
     caption = (meta.get("caption") or "").strip()
     if not caption:
-        raise PostError("l√©gende vide")
+        raise PostError("légende vide")
     if len(caption) > 2200:
-        raise PostError(f"l√©gende trop longue ({len(caption)} > 2200)")
+        raise PostError(f"légende trop longue ({len(caption)} > 2200)")
     if caption.count("#") > 30:
         raise PostError("plus de 30 hashtags")
     slides = meta.get("slides") or sorted(p.name for p in folder.glob("*.jpg"))
     if not 1 <= len(slides) <= 10:
-        raise PostError(f"{len(slides)} images (1 √† 10 attendues)")
+        raise PostError(f"{len(slides)} images (1 à 10 attendues)")
     for s in slides:
         if not (folder / s).is_file():
             raise PostError(f"image manquante: {s}")
@@ -117,7 +117,7 @@ def wait_ready(container_id, label):
         if code in ("ERROR", "EXPIRED"):
             raise PostError(f"{label}: {status}")
         time.sleep(3)
-    raise PostError(f"{label}: pas pr√™t apr√®s 3 minutes")
+    raise PostError(f"{label}: pas prêt après 3 minutes")
 
 
 def publish(folder, post, repo, sha):
@@ -125,19 +125,19 @@ def publish(folder, post, repo, sha):
     urls = [base + urllib.parse.quote(s) for s in post["slides"]]
     for u in urls:
         check_url(u)
-    log(f"  {len(urls)} URL v√©rifi√©es")
+    log(f"  {len(urls)} URL vérifiées")
 
     existing = already_on_instagram(post["caption"])
     if existing:
-        log(f"  d√©j√† publi√© sur Instagram ({existing['permalink']}), enregistrement seulement")
+        log(f"  déjà publié sur Instagram ({existing['permalink']}), enregistrement seulement")
         record(folder, existing["id"], existing["permalink"], existing["timestamp"], note="found existing")
         return
 
     if DRY_RUN:
-        log("  SIMULATION: rien n'est envoy√© √† Instagram")
+        log("  SIMULATION: rien n'est envoyé à Instagram")
         for i, u in enumerate(urls, 1):
             log(f"    {i}. {u}")
-        log(f"    l√©gende: {post['caption']}")
+        log(f"    légende: {post['caption']}")
         return
 
     if len(urls) == 1:
@@ -152,12 +152,12 @@ def publish(folder, post, repo, sha):
         creation_id = graph("POST", f"{IG_ID}/media", media_type="CAROUSEL",
                             children=",".join(children), caption=post["caption"])["id"]
         wait_ready(creation_id, "carrousel")
-    log("  conteneurs pr√™ts, publication‚Ä¶")
+    log("  conteneurs prêts, publication…")
 
     media_id = graph("POST", f"{IG_ID}/media_publish", creation_id=creation_id)["id"]
     info = graph("GET", media_id, fields="permalink,timestamp")
     record(folder, media_id, info.get("permalink"), info.get("timestamp"))
-    log(f"  PUBLI√â: {info.get('permalink')}")
+    log(f"  PUBLIÉ: {info.get('permalink')}")
 
 
 def record(folder, media_id, permalink, timestamp, note=None):
@@ -177,7 +177,12 @@ def main():
         sys.exit("INSTAGRAM_ACCESS_TOKEN ou INSTAGRAM_ACCOUNT_ID manquant")
 
     now = dt.datetime.now(dt.timezone.utc)
-    log(f"{now.astimezone(DEFAULT_TZ):%Y-%m-%d %H:%M} (Paris){' ‚Äî SIMULATION' if DRY_RUN else ''}")
+    log(f"{now.astimezone(DEFAULT_TZ):%Y-%m-%d %H:%M} (Paris){' — SIMULATION' if DRY_RUN else ''}")
+    try:
+        account = graph("GET", IG_ID, fields="username")
+    except PostError as e:
+        sys.exit(f"Token ou compte Instagram invalide: {e}")
+    log(f"Compte: @{account.get('username')}")
     failures, done = 0, 0
     for folder in sorted(p for p in Path(args.root).iterdir() if (p / "post.json").is_file()):
         if (folder / "published.json").exists():
@@ -190,20 +195,20 @@ def main():
             continue
         when = post["publish_at"].astimezone(DEFAULT_TZ)
         if not post["approved"]:
-            log(f"[{folder.name}] non approuv√©, ignor√©")
+            log(f"[{folder.name}] non approuvé, ignoré")
             continue
         if post["publish_at"] > now:
-            log(f"[{folder.name}] pr√©vu le {when:%Y-%m-%d %H:%M}, en attente")
+            log(f"[{folder.name}] prévu le {when:%Y-%m-%d %H:%M}, en attente")
             continue
         if done >= MAX_POSTS_PER_RUN:
-            log(f"[{folder.name}] d√ª, report√© au prochain passage")
+            log(f"[{folder.name}] dû, reporté au prochain passage")
             continue
-        log(f"[{folder.name}] d√ª depuis le {when:%Y-%m-%d %H:%M}")
+        log(f"[{folder.name}] dû depuis le {when:%Y-%m-%d %H:%M}")
         try:
             publish(folder, post, args.repo, args.sha)
             done += 1
         except PostError as e:
-            log(f"[{folder.name}] √âCHEC: {e}")
+            log(f"[{folder.name}] ÉCHEC: {e}")
             failures += 1
     sys.exit(1 if failures else 0)
 

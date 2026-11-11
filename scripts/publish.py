@@ -32,8 +32,8 @@ CTX = ssl.create_default_context()
 if sys.platform == "darwin" and Path("/etc/ssl/cert.pem").exists():
     CTX = ssl.create_default_context(cafile="/etc/ssl/cert.pem")
 
-TOKEN = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "")
-IG_ID = os.environ.get("INSTAGRAM_ACCOUNT_ID", "")
+TOKEN = os.environ.get("INSTAGRAM_ACCESS_TOKEN", "").strip()
+IG_ID = os.environ.get("INSTAGRAM_ACCOUNT_ID", "").strip()
 DRY_RUN = os.environ.get("DRY_RUN", "false").lower() == "true"
 
 
@@ -58,6 +58,8 @@ def graph(method, path, **params):
             return json.load(r)
     except urllib.error.HTTPError as e:
         raise PostError(f"API {method} {path}: {e.read().decode().replace(TOKEN, '<TOKEN>')}")
+    except (urllib.error.URLError, ValueError, TimeoutError, OSError) as e:
+        raise PostError(f"API {method} {path}: {type(e).__name__} (requête non envoyée ou sans réponse)")
 
 
 def parse_when(value):
@@ -175,6 +177,8 @@ def main():
     args = ap.parse_args()
     if not TOKEN or not IG_ID:
         sys.exit("INSTAGRAM_ACCESS_TOKEN ou INSTAGRAM_ACCOUNT_ID manquant")
+    if any(c.isspace() for c in TOKEN) or not IG_ID.isdigit():
+        sys.exit("Secret mal collé: le token contient un espace/retour à la ligne ou l'ID n'est pas numérique")
 
     now = dt.datetime.now(dt.timezone.utc)
     log(f"{now.astimezone(DEFAULT_TZ):%Y-%m-%d %H:%M} (Paris){' — SIMULATION' if DRY_RUN else ''}")
